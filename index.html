@@ -112,6 +112,7 @@
         <!-- 入出金フォーム画面 -->
         <div id="entry-form-screen" class="screen">
             <h2 id="form-title" class="mb-3"></h2>
+            <div id="success-message" class="text-success fw-bold text-center mt-2"></div>
             <form id="entry-form" onsubmit="return false;"> <!-- Enterキーでの意図しない送信を防ぐ -->
                 <input type="hidden" id="form-type">
                 <input type="hidden" id="edit-id">
@@ -142,11 +143,9 @@
                 </div>
                 <div class="d-grid gap-2">
                     <button type="button" id="submit-entry-btn" class="btn btn-primary btn-lg">登録</button>
-                    <div id="success-message" class="text-success fw-bold text-center mt-2"></div>
                     <button type="button" class="btn btn-secondary btn-lg back-to-home no-print">戻る</button>
                 </div>
             </form>
-        </div>
 
         <!-- 出納帳画面 -->
         <div id="ledger-screen" class="screen">
@@ -337,6 +336,7 @@
 
             // --- データベースの保存 ---
             const saveDB = () => {
+                console.log("Saving DB...");
                 localStorage.setItem('ledger_entries', JSON.stringify(db.entries));
                 localStorage.setItem('ledger_categories', JSON.stringify(db.categories));
             };
