@@ -166,6 +166,10 @@
         <div id="ledger-screen" class="screen">
             <div class="d-flex justify-content-between align-items-center mb-3 no-print">
                 <h2 id="ledger-year" class="mb-0">出納帳</h2>
+                <div class="input-group input-group-sm w-auto ms-3">
+                    <span class="input-group-text">会社名</span>
+                    <input type="text" class="form-control" id="company-name-input" placeholder="会社名を入力">
+                </div>
                 <div class="btn-group">
                     <select id="year-selector" class="form-select"></select>
                     <select id="month-selector" class="form-select"></select>
@@ -174,7 +178,7 @@
             <div class="table-responsive printable-area">
                 <!-- 印刷専用ヘッダー -->
                 <div id="print-header" class="d-none mb-3">
-                    <h2 class="m-0" style="font-size: 14pt;">三原設備</h2>
+                    <h2 id="print-company-name" class="m-0" style="font-size: 14pt;"></h2>
                     <p id="print-header-date" class="m-0" style="font-size: 10pt;"></p>
                 </div>
                 <h3 id="print-title" class="text-center d-none"></h3>
@@ -269,6 +273,8 @@
             const monthSelector = document.getElementById('month-selector');
             const printTitle = document.getElementById('print-title');
             const printHeaderDate = document.getElementById('print-header-date');
+            const companyNameInput = document.getElementById('company-name-input');
+            const printCompanyName = document.getElementById('print-company-name');
 
             const categoryListDiv = document.getElementById('category-list');
             const addMainCategoryBtn = document.getElementById('add-main-category-btn');
@@ -527,6 +533,7 @@
                 
                 printTitle.textContent = `${japaneseYear}年 ${printMonth} 出納帳`;
                 printHeaderDate.textContent = `${japaneseYear}年`; // 年度のみを表示
+                printCompanyName.textContent = companyNameInput.value; // 会社名を表示
             };
             
             const toJapaneseEra = (year) => {
@@ -692,7 +699,22 @@
 
             // --- 初期化処理 ---
             const init = () => {
+                // 会社名の読み込みと設定
+                const storedCompanyName = localStorage.getItem('company_name');
+                if (storedCompanyName) {
+                    companyNameInput.value = storedCompanyName;
+                }
+
                 // --- イベントリスナーを設定 ---
+                // 会社名入力フィールドの変更を監視
+                companyNameInput.addEventListener('input', () => {
+                    localStorage.setItem('company_name', companyNameInput.value);
+                });
+
+                // 印刷前に会社名を設定
+                window.addEventListener('beforeprint', () => {
+                    printCompanyName.textContent = companyNameInput.value;
+                });
                 // 画面遷移ボタン
                 showPaymentFormBtn.addEventListener('click', () => showEntryForm('payment'));
                 showIncomeFormBtn.addEventListener('click', () => showEntryForm('income'));
