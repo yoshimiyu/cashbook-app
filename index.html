@@ -33,7 +33,7 @@
             /* ページの余白を設定し、ブラウザのヘッダー/フッターを非表示にする */
             @page {
                 size: auto;
-                margin: 20mm;
+                margin: 10mm; /* 左右の余白を少なく */
                 /* ブラウザのデフォルトヘッダー/フッターを非表示にする */
                 @top-left { content: none; }
                 @top-center { content: none; }
@@ -58,9 +58,23 @@
                 align-items: flex-end; /* 下揃え */
             }
             table {
-                font-size: 10pt;
-                width: 100%; /* 印刷時に幅を100%に */
+                width: 100%;
+                table-layout: fixed;
+                border-collapse: collapse;
+                font-size: 8pt; /* 出納帳テーブルのフォントサイズを調整 */
             }
+            th, td {
+                word-wrap: break-word;
+                padding: 2px; /* 行の高さを低く */
+                vertical-align: top;
+            }
+            /* カラム幅の調整 */
+            table th:nth-child(1), table td:nth-child(1) { width: 9%; } /* 月日 */
+            table th:nth-child(2), table td:nth-child(2) { width: 17%; white-space: nowrap; } /* 科目 */
+            table th:nth-child(3), table td:nth-child(3) { width: 38%; } /* 摘要 */
+            table th:nth-child(4), table td:nth-child(4) { width: 12%; text-align: right; } /* 収入 */
+            table th:nth-child(5), table td:nth-child(5) { width: 12%; text-align: right; } /* 支払 */
+            table th:nth-child(6), table td:nth-child(6) { width: 12%; text-align: right; } /* 残高 */
         }
     </style>
 </head>
