@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>出納帳アプリ</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="apple-touch-icon" href="icons/icon-180x180-v2.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="出納帳">
+    <link rel="manifest" href="manifest.json">
+    <style>
+        /* iPhone/iPad向けの基本スタイル */
+        body {
+            -webkit-text-size-adjust: 100%;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        }
+        .screen {
+            display: none;
+            padding: 15px;
+        }
+        /* iOSでのボタン反応を改善 */
+        .btn, button {
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #home-screen { display: block; }
+        .container-fluid { max-width: 800px; }
+        .table-responsive { max-height: 70vh; }
+        /* 印刷用スタイル */
+        @media print {
+            /* ページの余白を設定し、ブラウザのヘッダー/フッターを非表示にする */
+            @page {
+                size: auto;
+                margin: 10mm; /* 左右の余白を少なく */
+                /* ブラウザのデフォルトヘッダー/フッターを非表示にする */
+                @top-left { content: none; }
+                @top-center { content: none; }
+                @top-right { content: none; }
+                @bottom-left { content: none; }
+                @bottom-center { content: none; }
+                @bottom-right { content: none; }
+            }
+            body, .container-fluid {
+                margin: 0;
+                padding: 0;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .printable-area {
+                display: block !important;
+            }
+            #print-header {
+                display: flex !important; /* flexboxを有効にする */
+                justify-content: space-between; /* 両端に配置 */
+                align-items: flex-end; /* 下揃え */
+            }
+            table {
+                width: 100%;
+                table-layout: fixed;
+                border-collapse: collapse;
+                font-size: 8pt; /* 出納帳テーブルのフォントサイズを調整 */
+            }
+            th, td {
+                word-wrap: break-word;
+                padding: 2px; /* 行の高さを低く */
+                vertical-align: top;
+            }
+            /* カラム幅の調整 */
+            table th:nth-child(1), table td:nth-child(1) { width: 9%; } /* 月日 */
+            table th:nth-child(2), table td:nth-child(2) { width: 17%; white-space: nowrap; } /* 科目 */
+            table th:nth-child(3), table td:nth-child(3) { width: 38%; } /* 摘要 */
+            table th:nth-child(4), table td:nth-child(4) { width: 12%; text-align: right; } /* 収入 */
+            table th:nth-child(5), table td:nth-child(5) { width: 12%; text-align: right; } /* 支払 */
+            table th:nth-child(6), table td:nth-child(6) { width: 12%; text-align: right; } /* 残高 */
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- ホーム画面 -->
+        <div id="home-screen" class="screen text-center">
+            <h1 class="my-4">出納帳</h1>
+            <div class="d-grid gap-3">
+                <button id="show-payment-form-btn" class="btn btn-primary btn-lg">出金伝票</button>
+                <button id="show-income-form-btn" class="btn btn-success btn-lg">入金伝票</button>
+                <button id="show-ledger-btn" class="btn btn-info btn-lg">出納帳を見る</button>
+                <button id="show-category-settings-btn" class="btn btn-secondary btn-lg">科目登録</button>
+                <hr>
+                <button id="export-data-btn" class="btn btn-outline-primary btn-lg">エクスポート (バックアップ)</button>
+                <button id="import-data-btn" class="btn btn-outline-success btn-lg">インポート (復元)</button>
+            </div>
+        </div>
+
+        <!-- エクスポート年度選択モーダル -->
+        <div class="modal fade" id="export-modal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="exportModalLabel">エクスポートする年度を選択</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>バックアップするデータの年度を選択してください。（複数選択可）</p>
+                        <div id="export-year-selection" class="mb-3">
+                            <!-- 年度選択チェックボックスがここに挿入される -->
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="export-all-years-switch">
+                            <label class="form-check-label" for="export-all-years-switch">全期間をエクスポートする</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                        <button type="button" class="btn btn-primary" id="execute-export-btn">エクスポート実行</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 非表示のファイル選択input -->
+        <input type="file" id="import-file-input" style="display: none;" accept=".json">
+
+        <!-- 入出金フォーム画面 -->
+        <div id="entry-form-screen" class="screen">
+            <h2 id="form-title" class="mb-3"></h2>
+            <div id="success-message" class="text-success fw-bold text-center mb-3"></div>
+            <form id="entry-form" onsubmit="return false;"> <!-- Enterキーでの意図しない送信を防ぐ -->
+                <input type="hidden" id="form-type">
+                <input type="hidden" id="edit-id">
+                <div class="mb-3">
+                    <label for="date" class="form-label">年月日</label>
+                    <input type="date" class="form-control form-control-lg" id="date" required>
+                </div>
+                <div class="mb-3">
+                    <label for="main-category-input" class="form-label">大分類</label>
+                    <input class="form-control form-control-lg" id="main-category-input" list="main-category-list" required placeholder="選択または新規入力...">
+                    <datalist id="main-category-list"></datalist>
+                </div>
+                <div class="mb-3">
+                    <label for="sub-category-input" class="form-label">小分類</label>
+                    <input class="form-control form-control-lg" id="sub-category-input" list="sub-category-list" required placeholder="選択または新規入力...">
+                    <datalist id="sub-category-list"></datalist>
+                </div>
+                <div class="mb-3">
+                    <label for="description" class="form-label">摘要</label>
+                    <input type="text" class="form-control form-control-lg" id="description">
+                </div>
+                <div class="mb-3">
+                    <label for="amount" class="form-label">金額</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control form-control-lg" id="amount" required placeholder="金額">
+                        <span class="input-group-text">円</span>
+                    </div>
+                </div>
+                <div class="d-grid gap-2">
+                    <button type="button" id="submit-entry-btn" class="btn btn-primary btn-lg">登録</button>
+                    <button type="button" class="btn btn-secondary btn-lg back-to-home no-print">戻る</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 出納帳画面 -->
+        <div id="ledger-screen" class="screen">
+            <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+                <h2 id="ledger-year" class="mb-0">出納帳</h2>
+                <div class="input-group input-group-sm w-auto ms-3">
+                    <span class="input-group-text">会社名</span>
+                    <input type="text" class="form-control" id="company-name-input" placeholder="会社名を入力">
+                </div>
+                <div class="btn-group">
+                    <select id="year-selector" class="form-select"></select>
+                    <select id="month-selector" class="form-select"></select>
+                </div>
+            </div>
+            <div class="table-responsive printable-area">
+                <!-- 印刷専用ヘッダー -->
+                <div id="print-header" class="d-none mb-3">
+                    <h2 id="print-company-name" class="m-0" style="font-size: 14pt;"></h2>
+                    <p id="print-header-date" class="m-0" style="font-size: 10pt;"></p>
+                </div>
+                <h3 id="print-title" class="text-center d-none"></h3>
+                <table class="table table-striped table-bordered">
+                    <thead>
+                        <tr>
+                            <th>月日</th>
+                            <th>科目</th>
+                            <th>摘要</th>
+                            <th>収入金額</th>
+                            <th>支払金額</th>
+                            <th>差引残高</th>
+                            <th class="no-print">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ledger-body"></tbody>
+                </table>
+            </div>
+            <div class="d-grid gap-2 mt-3 no-print">
+                 <button onclick="window.print()" class="btn btn-success">印刷する</button>
+                 <button type="button" class="btn btn-secondary back-to-home">戻る</button>
+            </div>
+        </div>
+
+        <!-- 科目登録画面 -->
+        <div id="category-screen" class="screen">
+            <h2 class="mb-3">科目登録</h2>
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">新規大分類の追加</h5>
+                    <div class="mb-3">
+                        <label class="form-label">対象伝票</label>
+                        <div class="form-check form-check-inline">
+                            <input type="radio" class="form-check-input" id="add-main-category-type-payment" name="add-main-category-type" value="payment" checked>
+                            <label for="add-main-category-type-payment" class="form-check-label">出金</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input type="radio" class="form-check-input" id="add-main-category-type-income" name="add-main-category-type" value="income">
+                            <label for="add-main-category-type-income" class="form-check-label">入金</label>
+                        </div>
+                    </div>
+                    <div class="input-group mb-3">
+                        <input type="text" id="new-main-category-name" class="form-control form-control-lg" placeholder="新規大分類名">
+                        <button id="add-main-category-btn" class="btn btn-primary">追加</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="category-list">
+                <!-- カテゴリリストがここに表示される -->
+            </div>
+
+            <div class="d-grid mt-3">
+                <button type="button" class="btn btn-secondary back-to-home">戻る</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM要素の取得 ---
+            const screens = document.querySelectorAll('.screen');
+            const homeScreen = document.getElementById('home-screen');
+            const entryFormScreen = document.getElementById('entry-form-screen');
+            const ledgerScreen = document.getElementById('ledger-screen');
+            const categoryScreen = document.getElementById('category-screen');
+
+            const showPaymentFormBtn = document.getElementById('show-payment-form-btn');
+            const showIncomeFormBtn = document.getElementById('show-income-form-btn');
+            const showLedgerBtn = document.getElementById('show-ledger-btn');
+            const showCategorySettingsBtn = document.getElementById('show-category-settings-btn');
+            const backButtons = document.querySelectorAll('.back-to-home');
+
+            const entryForm = document.getElementById('entry-form');
+            const formTitle = document.getElementById('form-title');
+            const formType = document.getElementById('form-type');
+            const editId = document.getElementById('edit-id');
+            const dateInput = document.getElementById('date');
+            const mainCategoryInput = document.getElementById('main-category-input');
+            const mainCategoryList = document.getElementById('main-category-list');
+            const subCategoryInput = document.getElementById('sub-category-input');
+            const subCategoryList = document.getElementById('sub-category-list');
+            const descriptionInput = document.getElementById('description');
+            const amountInput = document.getElementById('amount');
+            const successMessage = document.getElementById('success-message');
+            const submitEntryBtn = document.getElementById('submit-entry-btn');
+
+            const ledgerBody = document.getElementById('ledger-body');
+            const ledgerYear = document.getElementById('ledger-year');
+            const yearSelector = document.getElementById('year-selector');
+            const monthSelector = document.getElementById('month-selector');
+            const printTitle = document.getElementById('print-title');
+            const printHeaderDate = document.getElementById('print-header-date');
+            const companyNameInput = document.getElementById('company-name-input');
+            const printCompanyName = document.getElementById('print-company-name');
+
+            const categoryListDiv = document.getElementById('category-list');
+            const addMainCategoryBtn = document.getElementById('add-main-category-btn');
+            const newMainCategoryNameInput = document.getElementById('new-main-category-name');
+
+            const exportBtn = document.getElementById('export-data-btn');
+            const importBtn = document.getElementById('import-data-btn');
+            const importFileInput = document.getElementById('import-file-input');
+            const exportModal = new bootstrap.Modal(document.getElementById('export-modal'));
+            const exportYearSelection = document.getElementById('export-year-selection');
+            const executeExportBtn = document.getElementById('execute-export-btn');
+            const exportAllYearsSwitch = document.getElementById('export-all-years-switch');
+            
+            // --- 安全なデータ読み込み --- 
+            const getStoredData = (key, defaultValue) => {
+                const storedValue = localStorage.getItem(key);
+                if (storedValue === null || storedValue === undefined) {
+                    return defaultValue;
+                }
+                try {
+                    const parsed = JSON.parse(storedValue);
+                    return parsed === null ? defaultValue : parsed;
+                } catch (error) {
+                    console.error(`Failed to parse ${key} from localStorage. Using default.`, error);
+                    return defaultValue;
+                }
+            };
+
+            // --- データ構造の移行処理 ---
+            const migrateCategories = (categories) => {
+                let wasMigrated = false;
+                // 移行対象のデータがない、またはオブジェクトでない場合は何もしない
+                if (!categories || typeof categories !== 'object') {
+                    return { migrated: false, data: categories };
+                }
+                
+                const newCategories = JSON.parse(JSON.stringify(categories)); // Deep copy
+
+                ['payment', 'income'].forEach(type => {
+                    // カテゴリデータが存在し、かつ配列（旧形式）の場合、オブジェクト（新形式）に変換する
+                    if (newCategories[type] && Array.isArray(newCategories[type])) {
+                        console.log(`Migrating old '${type}' categories format.`);
+                        const oldData = newCategories[type];
+                        newCategories[type] = {}; // Reset to new format
+                        if (oldData.length > 0) {
+                            newCategories[type]['一般'] = oldData;
+                        }
+                        wasMigrated = true;
+                    }
+                });
+
+                return { migrated: wasMigrated, data: newCategories };
+            };
+
+            // --- 初期データと読み込み ---
+            const defaultCategories = {
+                payment: {
+                    '固定費': ['家賃', '光熱費', '通信費'],
+                    '変動費': ['食費', '交通費', '雑費']
+                },
+                income: {
+                    '給与': ['月給', '賞与'],
+                    'その他': ['臨時収入', '副業']
+                }
+            };
+
+            let db = {
+                entries: getStoredData('ledger_entries', []),
+                categories: getStoredData('ledger_categories', defaultCategories)
+            };
+
+            // 移行処理の実行
+            const migrationResult = migrateCategories(db.categories);
+            if (migrationResult.migrated) {
+                db.categories = migrationResult.data;
+                // saveDBはdb変数を参照するため、このスコープで直接localStorageに書き込む
+                localStorage.setItem('ledger_categories', JSON.stringify(db.categories));
+                alert('旧バージョンの科目データを新しい形式に更新しました。「一般」という大分類にまとめられています。');
+            }
+
+            // --- データベースの保存 ---
+            const saveDB = () => {
+                localStorage.setItem('ledger_entries', JSON.stringify(db.entries));
+                localStorage.setItem('ledger_categories', JSON.stringify(db.categories));
+            };
+
+            // --- 画面切り替え処理 ---
+            const showScreen = (screenToShow) => {
+                screens.forEach(screen => screen.style.display = 'none');
+                screenToShow.style.display = 'block';
+            };
+
+            // --- 入出金フォーム処理 ---
+            const showEntryForm = (type, entryToEdit = null) => {
+                entryForm.reset();
+                formType.value = type;
+                editId.value = '';
+                formTitle.textContent = type === 'payment' ? '出金伝票' : '入金伝票';
+                successMessage.textContent = '';
+
+                populateMainCategoryDatalist(type);
+                // 初期状態では大分類を絞らずに全ての小分類を表示
+                populateSubCategoryDatalist(type);
+
+                if (entryToEdit) {
+                    const mainCat = entryToEdit.category;
+                    const firstSpaceIndex = entryToEdit.description.indexOf(' ');
+                    let subCat = '';
+                    let desc = '';
+                    if (firstSpaceIndex !== -1) {
+                        subCat = entryToEdit.description.substring(0, firstSpaceIndex);
+                        desc = entryToEdit.description.substring(firstSpaceIndex + 1);
+                    } else {
+                        subCat = entryToEdit.description;
+                    }
+
+                    mainCategoryInput.value = mainCat;
+                    // 編集時は、保存されている大分類で小分類を絞り込む
+                    populateSubCategoryDatalist(type, mainCat);
+                    subCategoryInput.value = subCat;
+                    descriptionInput.value = desc;
+                    dateInput.value = entryToEdit.date;
+                    amountInput.value = entryToEdit.amount;
+                    editId.value = entryToEdit.id;
+                } else {
+                    dateInput.value = new Date().toISOString().slice(0, 10);
+                    mainCategoryInput.value = '';
+                    subCategoryInput.value = '';
+                }
+                
+                showScreen(entryFormScreen);
+            };
+
+            const populateMainCategoryDatalist = (type) => {
+                mainCategoryList.innerHTML = '';
+                const mainCategories = Object.keys(db.categories[type]);
+                mainCategories.forEach(cat => {
+                    mainCategoryList.innerHTML += `<option value="${cat}">`;
+                });
+            };
+
+            const populateSubCategoryDatalist = (type, mainCategory) => {
+                subCategoryList.innerHTML = '';
+                let subCategoriesToShow = [];
+
+                // 大分類が指定され、DBに存在する場合、その小分類を表示
+                if (mainCategory && db.categories[type][mainCategory]) {
+                    subCategoriesToShow = db.categories[type][mainCategory];
+                } else {
+                    // 大分類が指定されていない、または存在しない場合、全ての小分類を重複なく表示
+                    const allSubCategories = Object.values(db.categories[type]).flat();
+                    subCategoriesToShow = [...new Set(allSubCategories)];
+                }
+
+                subCategoriesToShow.forEach(cat => {
+                    subCategoryList.innerHTML += `<option value="${cat}">`;
+                });
+            };
+
+            // --- 新規カテゴリの動的追加処理 ---
+            const handleNewCategory = (type, level, value) => {
+                if (!value) return; // 値がなければ何もしない
+
+                if (level === 'main') {
+                    const mainCategories = Object.keys(db.categories[type]);
+                    if (!mainCategories.includes(value)) {
+                        if (confirm(`大分類「${value}」を新規登録しますか？`)) {
+                            db.categories[type][value] = []; // 新しい大分類を小分類の空リストと共に作成
+                            saveDB();
+                            populateMainCategoryDatalist(type);
+                        }
+                        // 登録しない場合は何もしない（入力値は維持）
+                    }
+                    // 大分類が変更されても小分類リストは独立しているので更新不要
+                } else if (level === 'sub') {
+                    // 全ての小分類リストを取得
+                    const allSubCategories = Object.values(db.categories[type]).flat();
+                    const uniqueSubCategories = [...new Set(allSubCategories)];
+
+                    if (!uniqueSubCategories.includes(value)) {
+                        if (confirm(`小分類「${value}」を新規登録しますか？\n(登録しない場合は「キャンセル」を押してください)`)) {
+                            const mainCategoryToAddTo = mainCategoryInput.value.trim();
+                            // 有効な大分類が入力されていれば、そこに紐付ける
+                            if (mainCategoryToAddTo && db.categories[type][mainCategoryToAddTo]) {
+                                db.categories[type][mainCategoryToAddTo].push(value);
+                                alert(`小分類「${value}」を「${mainCategoryToAddTo}」に登録しました。`);
+                            } else {
+                                // そうでなければ「その他」に紐付ける
+                                const defaultMainCategory = 'その他';
+                                if (!db.categories[type][defaultMainCategory]) {
+                                    db.categories[type][defaultMainCategory] = [];
+                                }
+                                db.categories[type][defaultMainCategory].push(value);
+                                alert(`小分類「${value}」を「${defaultMainCategory}」に登録しました。`);
+                            }
+                            saveDB();
+                            populateSubCategoryDatalist(type); // 小分類リストを更新
+                        }
+                        // 登録しない場合は何もしない（入力値は維持）
+                    }
+                }
+            };
+
+            // --- 出納帳表示処理 ---
+            const renderLedger = () => {
+                const selectedYear = yearSelector.value;
+                const selectedMonth = monthSelector.value;
+
+                const years = [...new Set(db.entries.map(e => new Date(e.date).getFullYear()))];
+                if (years.length === 0) years.push(new Date().getFullYear());
+                const currentYearVal = yearSelector.value;
+                yearSelector.innerHTML = years.sort((a, b) => b - a).map(y => `<option value="${y}">${toJapaneseEra(y)}年</option>`).join('');
+                if (years.includes(parseInt(currentYearVal))) {
+                    yearSelector.value = currentYearVal;
+                } else if (years.length > 0) {
+                    yearSelector.value = years[0];
+                }
+
+                let filteredEntries = db.entries.filter(e => {
+                    const entryDate = new Date(e.date);
+                    const yearMatch = yearSelector.value ? entryDate.getFullYear() == yearSelector.value : true;
+                    const monthMatch = selectedMonth !== 'all' ? entryDate.getMonth() + 1 == selectedMonth : true;
+                    return yearMatch && monthMatch;
+                });
+
+                filteredEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                ledgerBody.innerHTML = '';
+                let balance = 0;
+                filteredEntries.forEach(entry => {
+                    if (entry.type === 'income') {
+                        balance += entry.amount;
+                    } else {
+                        balance -= entry.amount;
+                    }
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${new Date(entry.date).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' })}</td>
+                        <td>${entry.category}</td>
+                        <td>${entry.description}</td>
+                        <td>${entry.type === 'income' ? entry.amount.toLocaleString() : ''}</td>
+                        <td>${entry.type === 'payment' ? entry.amount.toLocaleString() : ''}</td>
+                        <td>${balance.toLocaleString()}</td>
+                        <td class="no-print">
+                            <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${entry.id}">編集</button>
+                            <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${entry.id}">削除</button>
+                        </td>
+                    `;
+                    ledgerBody.appendChild(row);
+                });
+                
+                // 印刷用タイトルとヘッダーの日付を更新
+                const displayYear = yearSelector.value || new Date().getFullYear();
+                const printMonth = monthSelector.value === 'all' ? '通年' : `${monthSelector.options[monthSelector.selectedIndex].text}`;
+                const japaneseYear = toJapaneseEra(displayYear);
+                
+                printTitle.textContent = `${japaneseYear}年 ${printMonth} 出納帳`;
+                printHeaderDate.textContent = `${japaneseYear}年`; // 年度のみを表示
+                printCompanyName.textContent = companyNameInput.value; // 会社名を表示
+            };
+            
+            const toJapaneseEra = (year) => {
+                if (year >= 2019) return `令和${year - 2018}`;
+                if (year >= 1989) return `平成${year - 1988}`;
+                if (year >= 1926) return `昭和${year - 1925}`;
+                if (year >= 1912) return `大正${year - 1911}`;
+                return `西暦${year}`;
+            };
+
+            const setupMonthSelector = () => {
+                monthSelector.innerHTML = '<option value="all">通年</option>';
+                for(let i = 1; i <= 12; i++) {
+                    monthSelector.innerHTML += `<option value="${i}">${i}月</option>`;
+                }
+            };
+
+            // --- 科目登録処理 ---
+            const renderCategoryList = () => {
+                categoryListDiv.innerHTML = '';
+                ['payment', 'income'].forEach(type => {
+                    const typeName = type === 'payment' ? '出金' : '入金';
+                    let html = `<h3 class="mt-4">${typeName}科目</h3>`;
+                    const mainCategories = db.categories[type];
+
+                    if (Object.keys(mainCategories).length === 0) {
+                        html += '<p class="text-muted">登録済みの科目はありません。</p>';
+                    } else {
+                        for (const mainCat in mainCategories) {
+                            html += `
+                                <div class="card mb-3">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <strong>${mainCat}</strong>
+                                        <button class="btn btn-sm btn-outline-danger delete-main-category-btn" data-type="${type}" data-main="${mainCat}">大分類を削除</button>
+                                    </div>
+                                    <ul class="list-group list-group-flush">
+                            `;
+                            mainCategories[mainCat].forEach(subCat => {
+                                html += `
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        ${subCat}
+                                        <button class="btn btn-sm btn-outline-danger delete-sub-category-btn" data-type="${type}" data-main="${mainCat}" data-sub="${subCat}">削除</button>
+                                    </li>
+                                `;
+                            });
+                            html += `
+                                    </ul>
+                                    <div class="card-body">
+                                        <div class="input-group">
+                                            <input type="text" class="form-control new-sub-category-name" placeholder="新規小分類名">
+                                            <button class="btn btn-outline-primary add-sub-category-btn" data-type="${type}" data-main="${mainCat}">追加</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+                    categoryListDiv.innerHTML += html;
+                });
+            };
+
+            // --- データのエクスポート・インポート処理 ---
+            const setupExportImport = () => {
+                exportBtn.addEventListener('click', () => {
+                    const years = [...new Set(db.entries.map(e => new Date(e.date).getFullYear()))].sort((a, b) => b - a);
+                    exportYearSelection.innerHTML = '';
+                    if (years.length === 0) {
+                        exportYearSelection.innerHTML = '<p class="text-muted">データがありません。</p>';
+                    } else {
+                        years.forEach(year => {
+                            exportYearSelection.innerHTML += `
+                                <div class="form-check">
+                                    <input class="form-check-input export-year-checkbox" type="checkbox" value="${year}" id="export-year-${year}">
+                                    <label class="form-check-label" for="export-year-${year}">
+                                        ${toJapaneseEra(year)}年
+                                    </label>
+                                </div>
+                            `;
+                        });
+                    }
+                    exportAllYearsSwitch.checked = false;
+                    exportAllYearsSwitch.dispatchEvent(new Event('change'));
+                    exportModal.show();
+                });
+
+                exportAllYearsSwitch.addEventListener('change', (e) => {
+                    const checkboxes = document.querySelectorAll('.export-year-checkbox');
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = e.target.checked;
+                        checkbox.disabled = e.target.checked;
+                    });
+                });
+
+                executeExportBtn.addEventListener('click', () => {
+                    const selectedYears = Array.from(document.querySelectorAll('.export-year-checkbox:checked')).map(cb => parseInt(cb.value));
+                    
+                    if (!exportAllYearsSwitch.checked && selectedYears.length === 0) {
+                        alert('エクスポートする年度を少なくとも1つ選択してください。');
+                        return;
+                    }
+
+                    let entriesToExport;
+                    let fileNameSuffix;
+
+                    if (exportAllYearsSwitch.checked) {
+                        entriesToExport = db.entries;
+                        fileNameSuffix = 'all';
+                    } else {
+                        entriesToExport = db.entries.filter(entry => selectedYears.includes(new Date(entry.date).getFullYear()));
+                        fileNameSuffix = selectedYears.join('-');
+                    }
+
+                    const dataToExport = JSON.stringify({ ...db, entries: entriesToExport }, null, 2);
+                    const blob = new Blob([dataToExport], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `suitoucho_backup_${fileNameSuffix}_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    exportModal.hide();
+                    alert('バックアップファイルが保存されました。ファイルアプリなどを確認してください。');
+                });
+
+                importBtn.addEventListener('click', () => {
+                    if (!confirm('バックアップファイルを読み込みますか？\n※注意: 現在のデータは上書きされます！')) return;
+                    importFileInput.click();
+                });
+
+                importFileInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const importedData = JSON.parse(event.target.result);
+                            if (importedData && importedData.entries && importedData.categories) {
+                                if (typeof importedData.categories.payment === 'object' && !Array.isArray(importedData.categories.payment)) {
+                                     db = importedData;
+                                     saveDB();
+                                     renderLedger();
+                                     alert('データのインポートが完了しました。');
+                                     showScreen(homeScreen);
+                                } else {
+                                    alert('古い形式のバックアップファイルです。インポート機能が更新されたため、このファイルは使用できません。');
+                                }
+                            } else {
+                                alert('ファイルの形式が正しくありません。');
+                            }
+                        } catch (error) {
+                            alert('ファイルの読み込みに失敗しました。破損している可能性があります。');
+                            console.error("Import Error:", error);
+                        }
+                    };
+                    reader.readAsText(file);
+                    importFileInput.value = '';
+                });
+            };
+
+            // --- 初期化処理 ---
+            const init = () => {
+                // 会社名の読み込みと設定
+                const storedCompanyName = localStorage.getItem('company_name');
+                if (storedCompanyName) {
+                    companyNameInput.value = storedCompanyName;
+                }
+
+                // --- イベントリスナーを設定 ---
+                // 会社名入力フィールドの変更を監視
+                companyNameInput.addEventListener('input', () => {
+                    localStorage.setItem('company_name', companyNameInput.value);
+                });
+
+                // 印刷前に会社名を設定
+                window.addEventListener('beforeprint', () => {
+                    printCompanyName.textContent = companyNameInput.value;
+                });
+                // 画面遷移ボタン
+                showPaymentFormBtn.addEventListener('click', () => showEntryForm('payment'));
+                showIncomeFormBtn.addEventListener('click', () => showEntryForm('income'));
+                showLedgerBtn.addEventListener('click', () => {
+                    renderLedger();
+                    showScreen(ledgerScreen);
+                });
+                showCategorySettingsBtn.addEventListener('click', () => {
+                    renderCategoryList();
+                    showScreen(categoryScreen);
+                });
+                backButtons.forEach(btn => btn.addEventListener('click', () => showScreen(homeScreen)));
+
+                // 金額入力の自動半角変換
+                amountInput.addEventListener('input', () => {
+                    amountInput.value = amountInput.value.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+                });
+
+                // 入出金フォーム
+                mainCategoryInput.addEventListener('input', (e) => {
+                    // 入力があるたびに小分類リストを動的に更新
+                    populateSubCategoryDatalist(formType.value, e.target.value.trim());
+                    subCategoryInput.value = ''; // 大分類が変わったら小分類はクリア
+                });
+                mainCategoryInput.addEventListener('change', (e) => handleNewCategory(formType.value, 'main', e.target.value.trim()));
+                subCategoryInput.addEventListener('change', (e) => handleNewCategory(formType.value, 'sub', e.target.value.trim()));
+
+                submitEntryBtn.addEventListener('click', () => {
+                    // フォームのバリデーションを手動で実行
+                    if (!entryForm.checkValidity()) {
+                        entryForm.reportValidity();
+                        return;
+                    }
+
+                    const mainCategoryValue = mainCategoryInput.value.trim() || '未分類'; // 空の場合は「未分類」とする
+                    const subCategoryValue = subCategoryInput.value.trim();
+                    const descriptionValue = descriptionInput.value.trim();
+
+                    const entryData = {
+                        id: editId.value ? editId.value : Date.now().toString(),
+                        type: formType.value,
+                        date: dateInput.value,
+                        category: mainCategoryValue,
+                        description: `${subCategoryValue} ${descriptionValue}`.trim(),
+                        amount: parseInt(amountInput.value, 10)
+                    };
+
+                    if (editId.value) {
+                        db.entries = db.entries.map(entry => entry.id === editId.value ? entryData : entry);
+                        saveDB();
+                        renderLedger();
+                        showScreen(ledgerScreen);
+                    } else {
+                        db.entries.push(entryData);
+                        saveDB();
+                        
+                        successMessage.textContent = '登録しました！';
+                        setTimeout(() => { successMessage.textContent = '' }, 2000);
+
+                        // フォームをリセット（日付のみ維持）
+                        mainCategoryInput.value = '';
+                        subCategoryInput.value = '';
+                        descriptionInput.value = '';
+                        amountInput.value = '';
+                        mainCategoryInput.focus(); // 次の入力のために大分類にフォーカス
+                    }
+                });
+
+                // 出納帳
+                yearSelector.addEventListener('change', renderLedger);
+                monthSelector.addEventListener('change', renderLedger);
+                ledgerBody.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('delete-btn')) {
+                        if (confirm('この項目を削除しますか？')) {
+                            const idToDelete = e.target.dataset.id;
+                            db.entries = db.entries.filter(entry => entry.id !== idToDelete);
+                            saveDB();
+                            renderLedger();
+                        }
+                    }
+                    if (e.target.classList.contains('edit-btn')) {
+                        const idToEdit = e.target.dataset.id;
+                        const entryToEdit = db.entries.find(entry => entry.id === idToEdit);
+                        showEntryForm(entryToEdit.type, entryToEdit);
+                    }
+                });
+
+                // 科目登録
+                addMainCategoryBtn.addEventListener('click', () => {
+                    const type = document.querySelector('input[name="add-main-category-type"]:checked').value;
+                    const newMainCategory = newMainCategoryNameInput.value.trim();
+                    if (newMainCategory && !db.categories[type][newMainCategory]) {
+                        db.categories[type][newMainCategory] = [];
+                        saveDB();
+                        renderCategoryList();
+                        newMainCategoryNameInput.value = '';
+                    } else if (!newMainCategory) {
+                        alert('大分類名を入力してください。');
+                    } else {
+                        alert('その大分類は既に存在します。');
+                    }
+                });
+
+                categoryListDiv.addEventListener('click', (e) => {
+                    const { type, main, sub } = e.target.dataset;
+
+                    if (e.target.classList.contains('add-sub-category-btn')) {
+                        const input = e.target.previousElementSibling;
+                        const newSubCategory = input.value.trim();
+                        if (newSubCategory && !db.categories[type][main].includes(newSubCategory)) {
+                            db.categories[type][main].push(newSubCategory);
+                            saveDB();
+                            renderCategoryList();
+                        } else if (!newSubCategory) {
+                            alert('小分類名を入力してください。');
+                        } else {
+                            alert('その小分類は既に存在します。');
+                        }
+                    }
+
+                    if (e.target.classList.contains('delete-sub-category-btn')) {
+                        if (confirm(`【${main}】の小分類「${sub}」を削除しますか？`)) {
+                            db.categories[type][main] = db.categories[type][main].filter(c => c !== sub);
+                            saveDB();
+                            renderCategoryList();
+                        }
+                    }
+
+                    if (e.target.classList.contains('delete-main-category-btn')) {
+                        if (confirm(`大分類「${main}」を削除しますか？\n※関連する小分類もすべて削除されます。`)) {
+                            delete db.categories[type][main];
+                            saveDB();
+                            renderCategoryList();
+                        }
+                    }
+                });
+
+                // データのエクスポート・インポート
+                setupExportImport();
+
+                // --- 初期表示 ---
+                setupMonthSelector();
+                renderLedger();
+                showScreen(homeScreen);
+            };
+
+            init();
+
+            // Service Workerの登録
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/cashbook-app/service-worker.js')
+                        .then(registration => {
+                            console.log('Service Worker registered: ', registration);
+                        })
+                        .catch(error => {
+                            console.error('Service Worker registration failed: ', error);
+                        });
+                });
+            }
+        });
+    </script>
+</body>
+</html>
