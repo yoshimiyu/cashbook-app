@@ -33,6 +33,8 @@
             background-color: #cfe2ff !important;
         }
 
+        table th:nth-child(1), table td:nth-child(1) { width: 12%; text-align: right; }   /* 月日 */
+
         /* 印刷用スタイル */
         @media print {
             body {
@@ -76,7 +78,6 @@
                 align-items: flex-end;
             }
             /* カラム幅の調整 */
-            table th:nth-child(1), table td:nth-child(1) { width: 8%; }   /* 月日 */
             table th:nth-child(2), table td:nth-child(2) { width: 15%; white-space: nowrap; } /* 科目 */
             table th:nth-child(3), table td:nth-child(3) { width: 30%; }  /* 摘要 */
             table th:nth-child(4), table td:nth-child(4) { width: 12%; text-align: right; } /* 収入 */
@@ -628,7 +629,7 @@
                     }
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td>${new Date(entry.date).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' })}</td>
+                        <td>${new Date(entry.date).getMonth() + 1}月${new Date(entry.date).getDate()}日</td>
                         <td>${entry.category}</td>
                         <td>${entry.description}</td>
                         <td class="text-end">${entry.type === 'income' ? entry.amount.toLocaleString() : ''}</td>
