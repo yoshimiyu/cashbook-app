@@ -28,53 +28,60 @@
         #home-screen { display: block; }
         .container-fluid { max-width: 800px; }
         .table-responsive { max-height: 70vh; }
+        
+        .table-info-cell {
+            background-color: #cfe2ff !important;
+        }
+
         /* 印刷用スタイル */
         @media print {
-            /* ページの余白を設定し、ブラウザのヘッダー/フッターを非表示にする */
+            body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .table-responsive {
+                overflow: visible !important;
+                max-height: none !important;
+            }
+            thead {
+                display: table-header-group !important;
+            }
+            tbody tr {
+                page-break-inside: avoid !important;
+            }
             @page {
-                size: auto;
-                margin: 10mm; /* 左右の余白を少なく */
-                /* ブラウザのデフォルトヘッダー/フッターを非表示にする */
-                @top-left { content: none; }
-                @top-center { content: none; }
-                @top-right { content: none; }
-                @bottom-left { content: none; }
-                @bottom-center { content: none; }
-                @bottom-right { content: none; }
+                margin: 10mm;
             }
             body, .container-fluid {
                 margin: 0;
                 padding: 0;
             }
-            .no-print {
-                display: none !important;
-            }
-            .printable-area {
-                display: block !important;
-            }
-            #print-header {
-                display: flex !important; /* flexboxを有効にする */
-                justify-content: space-between; /* 両端に配置 */
-                align-items: flex-end; /* 下揃え */
-            }
             table {
+                font-size: 10pt; /* 文字サイズを大きく */
                 width: 100%;
                 table-layout: fixed;
                 border-collapse: collapse;
-                font-size: 8pt; /* 出納帳テーブルのフォントサイズを調整 */
             }
             th, td {
                 word-wrap: break-word;
-                padding: 2px; /* 行の高さを低く */
+                padding: 2px;
                 vertical-align: top;
             }
+            #print-header {
+                display: flex !important;
+                justify-content: space-between;
+                align-items: flex-end;
+            }
             /* カラム幅の調整 */
-            table th:nth-child(1), table td:nth-child(1) { width: 9%; } /* 月日 */
-            table th:nth-child(2), table td:nth-child(2) { width: 17%; white-space: nowrap; } /* 科目 */
-            table th:nth-child(3), table td:nth-child(3) { width: 38%; } /* 摘要 */
+            table th:nth-child(1), table td:nth-child(1) { width: 8%; }   /* 月日 */
+            table th:nth-child(2), table td:nth-child(2) { width: 15%; white-space: nowrap; } /* 科目 */
+            table th:nth-child(3), table td:nth-child(3) { width: 30%; }  /* 摘要 */
             table th:nth-child(4), table td:nth-child(4) { width: 12%; text-align: right; } /* 収入 */
             table th:nth-child(5), table td:nth-child(5) { width: 12%; text-align: right; } /* 支払 */
-            table th:nth-child(6), table td:nth-child(6) { width: 12%; text-align: right; } /* 残高 */
+            table th:nth-child(6), table td:nth-child(6) { width: 13%; text-align: right; } /* 残高 */
         }
     </style>
 </head>
@@ -83,14 +90,33 @@
         <!-- ホーム画面 -->
         <div id="home-screen" class="screen text-center">
             <h1 class="my-4">出納帳</h1>
-            <div class="d-grid gap-3">
-                <button id="show-payment-form-btn" class="btn btn-primary btn-lg">出金伝票</button>
-                <button id="show-income-form-btn" class="btn btn-success btn-lg">入金伝票</button>
-                <button id="show-ledger-btn" class="btn btn-info btn-lg">出納帳を見る</button>
-                <button id="show-category-settings-btn" class="btn btn-secondary btn-lg">科目登録</button>
+            <div class="container">
+                <div class="row row-cols-2 g-3">
+                    <div class="col">
+                        <button id="show-payment-form-btn" class="btn btn-primary w-100">出金伝票</button>
+                    </div>
+                    <div class="col">
+                        <button id="show-income-form-btn" class="btn btn-success w-100">入金伝票</button>
+                    </div>
+                    <div class="col">
+                        <button id="show-ledger-btn" class="btn btn-info w-100">出納帳を見る</button>
+                    </div>
+                    <div class="col">
+                        <button id="show-category-settings-btn" class="btn btn-secondary w-100">科目登録</button>
+                    </div>
+                </div>
                 <hr>
-                <button id="export-data-btn" class="btn btn-outline-primary btn-lg">エクスポート (バックアップ)</button>
-                <button id="import-data-btn" class="btn btn-outline-success btn-lg">インポート (復元)</button>
+                <div class="row row-cols-1 row-cols-md-3 g-3">
+                    <div class="col">
+                        <button id="export-data-btn" class="btn btn-outline-primary w-100">エクスポート (バックアップ)</button>
+                    </div>
+                    <div class="col">
+                        <button id="import-data-btn" class="btn btn-outline-success w-100">インポート (復元)</button>
+                    </div>
+                    <div class="col">
+                        <button id="reset-data-btn" class="btn btn-outline-danger w-100">データリセット</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -195,6 +221,7 @@
                         </tr>
                     </thead>
                     <tbody id="ledger-body"></tbody>
+                    <tfoot id="ledger-footer"></tfoot>
                 </table>
             </div>
             <div class="d-grid gap-2 mt-3 no-print">
@@ -268,6 +295,7 @@
             const submitEntryBtn = document.getElementById('submit-entry-btn');
 
             const ledgerBody = document.getElementById('ledger-body');
+            const ledgerFooter = document.getElementById('ledger-footer');
             const ledgerYear = document.getElementById('ledger-year');
             const yearSelector = document.getElementById('year-selector');
             const monthSelector = document.getElementById('month-selector');
@@ -287,6 +315,7 @@
             const exportYearSelection = document.getElementById('export-year-selection');
             const executeExportBtn = document.getElementById('execute-export-btn');
             const exportAllYearsSwitch = document.getElementById('export-all-years-switch');
+            const resetDataBtn = document.getElementById('reset-data-btn');
             
             // --- 安全なデータ読み込み --- 
             const getStoredData = (key, defaultValue) => {
@@ -306,7 +335,6 @@
             // --- データ構造の移行処理 ---
             const migrateCategories = (categories) => {
                 let wasMigrated = false;
-                // 移行対象のデータがない、またはオブジェクトでない場合は何もしない
                 if (!categories || typeof categories !== 'object') {
                     return { migrated: false, data: categories };
                 }
@@ -314,7 +342,6 @@
                 const newCategories = JSON.parse(JSON.stringify(categories)); // Deep copy
 
                 ['payment', 'income'].forEach(type => {
-                    // カテゴリデータが存在し、かつ配列（旧形式）の場合、オブジェクト（新形式）に変換する
                     if (newCategories[type] && Array.isArray(newCategories[type])) {
                         console.log(`Migrating old '${type}' categories format.`);
                         const oldData = newCategories[type];
@@ -342,7 +369,91 @@
             };
 
             let db = {
-                entries: getStoredData('ledger_entries', []),
+                entries: getStoredData('ledger_entries', [
+                    // 令和5年 (2023) - 40件
+                    { "id": "1672531200001", "type": "income", "date": "2023-01-01", "category": "給与", "description": "月給 1月分", "amount": 280000 },
+                    { "id": "1672531200002", "type": "payment", "date": "2023-01-01", "category": "固定費", "description": "家賃", "amount": 75000 },
+                    { "id": "1672531200003", "type": "payment", "date": "2023-01-05", "category": "変動費", "description": "食費", "amount": 7000 },
+                    { "id": "1672531200004", "type": "payment", "date": "2023-01-10", "category": "変動費", "description": "雑費", "amount": 3000 },
+                    { "id": "1675209600001", "type": "income", "date": "2023-02-01", "category": "給与", "description": "月給 2月分", "amount": 280000 },
+                    { "id": "1675209600002", "type": "payment", "date": "2023-02-01", "category": "固定費", "description": "家賃", "amount": 75000 },
+                    { "id": "1675209600003", "type": "payment", "date": "2023-02-14", "category": "交際費", "description": "バレンタイン", "amount": 5000 },
+                    { "id": "1675209600004", "type": "payment", "date": "2023-02-20", "category": "趣味", "description": "漫画", "amount": 2000 },
+                    { "id": "1677628800001", "type": "income", "date": "2023-03-01", "category": "給与", "description": "月給 3月分", "amount": 280000 },
+                    { "id": "1677628800002", "type": "payment", "date": "2023-03-01", "category": "固定費", "description": "家賃", "amount": 75000 },
+                    { "id": "1677628800003", "type": "payment", "date": "2023-03-15", "category": "固定費", "description": "光熱費", "amount": 18000 },
+                    { "id": "1677628800004", "type": "payment", "date": "2023-03-25", "category": "交通費", "description": "旅行", "amount": 30000 },
+                    { "id": "1680307200001", "type": "income", "date": "2023-04-01", "category": "給与", "description": "月給 4月分", "amount": 285000 },
+                    { "id": "1680307200002", "type": "payment", "date": "2023-04-01", "category": "固定費", "description": "家賃", "amount": 75000 },
+                    { "id": "1680307200003", "type": "payment", "date": "2023-04-10", "category": "交際費", "description": "歓迎会", "amount": 6000 },
+                    { "id": "1682899200001", "type": "income", "date": "2023-05-01", "category": "給与", "description": "月給 5月分", "amount": 285000 },
+                    { "id": "1682899200002", "type": "payment", "date": "2023-05-01", "category": "固定費", "description": "家賃", "amount": 75000 },
+                    { "id": "1682899200003", "type": "payment", "date": "2023-05-04", "category": "趣味", "description": "GW", "amount": 20000 },
+                    { "id": "1685577600001", "type": "income", "date": "2023-06-01", "category": "給与", "description": "月給 6月分", "amount": 285000 },
+                    { "id": "1685577600002", "type": "payment", "date": "2023-06-01", "category": "固定費", "description": "家賃", "amount": 75000 },
+                    { "id": "1688169600001", "type": "income", "date": "2023-07-01", "category": "給与", "description": "月給 7月分", "amount": 285000 },
+                    { "id": "1688169600002", "type": "payment", "date": "2023-07-01", "category": "固定費", "description": "家賃", "amount": 75000 },
+                    { "id": "1690848000001", "type": "income", "date": "2023-08-01", "category": "給与", "description": "月給 8月分", "amount": 285000 },
+                    { "id": "1690848000002", "type": "payment", "date": "2023-08-01", "category": "固定費", "description": "家賃", "amount": 75000 },
+                    { "id": "1693526400001", "type": "income", "date": "2023-09-01", "category": "給与", "description": "月給 9月分", "amount": 285000 },
+                    { "id": "1693526400002", "type": "payment", "date": "2023-09-01", "category": "固定費", "description": "家賃", "amount": 75000 },
+                    { "id": "1696118400001", "type": "income", "date": "2023-10-01", "category": "給与", "description": "月給 10月分", "amount": 285000 },
+                    { "id": "1696118400002", "type": "payment", "date": "2023-10-01", "category": "固定費", "description": "家賃", "amount": 75000 },
+                    { "id": "1698796800001", "type": "income", "date": "2023-11-01", "category": "給与", "description": "月給 11月分", "amount": 285000 },
+                    { "id": "1698796800002", "type": "payment", "date": "2023-11-01", "category": "固定費", "description": "家賃", "amount": 75000 },
+                    { "id": "1701388800001", "type": "income", "date": "2023-12-01", "category": "給与", "description": "月給 12月分", "amount": 285000 },
+                    { "id": "1701388800002", "type": "payment", "date": "2023-12-01", "category": "固定費", "description": "家賃", "amount": 75000 },
+                    { "id": "1701388800003", "type": "income", "date": "2023-12-10", "category": "賞与", "description": "冬のボーナス", "amount": 450000 },
+                    { "id": "1701388800004", "type": "payment", "date": "2023-12-24", "category": "交際費", "description": "クリスマス", "amount": 15000 },
+                    { "id": "1672531200005", "type": "payment", "date": "2023-01-15", "category": "固定費", "description": "通信費", "amount": 6000 },
+                    { "id": "1675209600005", "type": "payment", "date": "2023-02-15", "category": "固定費", "description": "通信費", "amount": 6000 },
+                    { "id": "1677628800005", "type": "payment", "date": "2023-03-15", "category": "固定費", "description": "通信費", "amount": 6000 },
+                    { "id": "1680307200005", "type": "payment", "date": "2023-04-15", "category": "固定費", "description": "通信費", "amount": 6000 },
+                    { "id": "1682899200005", "type": "payment", "date": "2023-05-15", "category": "固定費", "description": "通信費", "amount": 6000 },
+                    { "id": "1685577600005", "type": "payment", "date": "2023-06-15", "category": "固定費", "description": "通信費", "amount": 6000 },
+                    // 令和6年 (2024) - 20件
+                    { "id": "1704067200001", "type": "income", "date": "2024-01-01", "category": "給与", "description": "月給 1月分", "amount": 290000 },
+                    { "id": "1704067200002", "type": "payment", "date": "2024-01-01", "category": "固定費", "description": "家賃", "amount": 78000 },
+                    { "id": "1704067200003", "type": "payment", "date": "2024-01-10", "category": "変動費", "description": "食費", "amount": 8000 },
+                    { "id": "1706745600001", "type": "income", "date": "2024-02-01", "category": "給与", "description": "月給 2月分", "amount": 290000 },
+                    { "id": "1706745600002", "type": "payment", "date": "2024-02-01", "category": "固定費", "description": "家賃", "amount": 78000 },
+                    { "id": "1709251200001", "type": "income", "date": "2024-03-01", "category": "給与", "description": "月給 3月分", "amount": 290000 },
+                    { "id": "1709251200002", "type": "payment", "date": "2024-03-01", "category": "固定費", "description": "家賃", "amount": 78000 },
+                    { "id": "1711929600001", "type": "income", "date": "2024-04-01", "category": "給与", "description": "月給 4月分", "amount": 300000 },
+                    { "id": "1711929600002", "type": "payment", "date": "2024-04-01", "category": "固定費", "description": "家賃", "amount": 80000 },
+                    { "id": "1714521600001", "type": "income", "date": "2024-05-01", "category": "給与", "description": "月給 5月分", "amount": 300000 },
+                    { "id": "1714521600002", "type": "payment", "date": "2024-05-01", "category": "固定費", "description": "家賃", "amount": 80000 },
+                    { "id": "1717200000001", "type": "income", "date": "2024-06-01", "category": "給与", "description": "月給 6月分", "amount": 300000 },
+                    { "id": "1717200000002", "type": "payment", "date": "2024-06-01", "category": "固定費", "description": "家賃", "amount": 80000 },
+                    { "id": "1717200000003", "type": "income", "date": "2024-06-25", "category": "賞与", "description": "夏のボーナス", "amount": 500000 },
+                    { "id": "1719792000001", "type": "income", "date": "2024-07-01", "category": "給与", "description": "月給 7月分", "amount": 300000 },
+                    { "id": "1719792000002", "type": "payment", "date": "2024-07-01", "category": "固定費", "description": "家賃", "amount": 80000 },
+                    { "id": "1719792000003", "type": "payment", "date": "2024-07-20", "category": "医療費", "description": "定期健診", "amount": 10000 },
+                    { "id": "1722470400001", "type": "income", "date": "2024-08-01", "category": "給与", "description": "月給 8月分", "amount": 300000 },
+                    { "id": "1722470400002", "type": "payment", "date": "2024-08-01", "category": "固定費", "description": "家賃", "amount": 80000 },
+                    { "id": "1722470400003", "type": "payment", "date": "2024-08-12", "category": "交通費", "description": "帰省", "amount": 40000 },
+                    // 令和7年 (2025) - 20件
+                    { "id": "1735689600001", "type": "income", "date": "2025-01-01", "category": "給与", "description": "月給 1月分", "amount": 310000 },
+                    { "id": "1735689600002", "type": "payment", "date": "2025-01-01", "category": "固定費", "description": "家賃", "amount": 82000 },
+                    { "id": "1735689600003", "type": "payment", "date": "2025-01-15", "category": "固定費", "description": "光熱費", "amount": 20000 },
+                    { "id": "1738368000001", "type": "income", "date": "2025-02-01", "category": "給与", "description": "月給 2月分", "amount": 310000 },
+                    { "id": "1738368000002", "type": "payment", "date": "2025-02-01", "category": "固定費", "description": "家賃", "amount": 82000 },
+                    { "id": "1738368000003", "type": "payment", "date": "2025-02-20", "category": "変動費", "description": "食費", "amount": 10000 },
+                    { "id": "1740873600001", "type": "income", "date": "2025-03-01", "category": "給与", "description": "月給 3月分", "amount": 310000 },
+                    { "id": "1740873600002", "type": "payment", "date": "2025-03-01", "category": "固定費", "description": "家賃", "amount": 82000 },
+                    { "id": "1743552000001", "type": "income", "date": "2025-04-01", "category": "給与", "description": "月給 4月分", "amount": 310000 },
+                    { "id": "1743552000002", "type": "payment", "date": "2025-04-01", "category": "固定費", "description": "家賃", "amount": 82000 },
+                    { "id": "1746144000001", "type": "income", "date": "2025-05-01", "category": "給与", "description": "月給 5月分", "amount": 310000 },
+                    { "id": "1746144000002", "type": "payment", "date": "2025-05-01", "category": "固定費", "description": "家賃", "amount": 82000 },
+                    { "id": "1748822400001", "type": "income", "date": "2025-06-01", "category": "給与", "description": "月給 6月分", "amount": 310000 },
+                    { "id": "1748822400002", "type": "payment", "date": "2025-06-01", "category": "固定費", "description": "家賃", "amount": 82000 },
+                    { "id": "1751414400001", "type": "income", "date": "2025-07-01", "category": "給与", "description": "月給 7月分", "amount": 310000 },
+                    { "id": "1751414400002", "type": "payment", "date": "2025-07-01", "category": "固定費", "description": "家賃", "amount": 82000 },
+                    { "id": "1751414400003", "type": "payment", "date": "2025-07-07", "category": "交際費", "description": "プレゼント", "amount": 8000 },
+                    { "id": "1754092800001", "type": "income", "date": "2025-08-01", "category": "給与", "description": "月給 8月分", "amount": 310000 },
+                    { "id": "1754092800002", "type": "payment", "date": "2025-08-01", "category": "固定費", "description": "家賃", "amount": 82000 },
+                    { "id": "1754092800003", "type": "payment", "date": "2025-08-20", "category": "趣味", "description": "旅行", "amount": 50000 }
+                ]),
                 categories: getStoredData('ledger_categories', defaultCategories)
             };
 
@@ -504,20 +615,25 @@
 
                 ledgerBody.innerHTML = '';
                 let balance = 0;
+                let totalIncome = 0;
+                let totalPayment = 0;
+
                 filteredEntries.forEach(entry => {
                     if (entry.type === 'income') {
                         balance += entry.amount;
+                        totalIncome += entry.amount;
                     } else {
                         balance -= entry.amount;
+                        totalPayment += entry.amount;
                     }
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td>${new Date(entry.date).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' })}</td>
                         <td>${entry.category}</td>
                         <td>${entry.description}</td>
-                        <td>${entry.type === 'income' ? entry.amount.toLocaleString() : ''}</td>
-                        <td>${entry.type === 'payment' ? entry.amount.toLocaleString() : ''}</td>
-                        <td>${balance.toLocaleString()}</td>
+                        <td class="text-end">${entry.type === 'income' ? entry.amount.toLocaleString() : ''}</td>
+                        <td class="text-end">${entry.type === 'payment' ? entry.amount.toLocaleString() : ''}</td>
+                        <td class="text-end">${balance.toLocaleString()}</td>
                         <td class="no-print">
                             <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${entry.id}">編集</button>
                             <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${entry.id}">削除</button>
@@ -526,14 +642,29 @@
                     ledgerBody.appendChild(row);
                 });
                 
-                // 印刷用タイトルとヘッダーの日付を更新
+                // 月間合計の表示
+                if (selectedMonth !== 'all') {
+                    ledgerFooter.innerHTML = `
+                        <tr>
+                            <th></th>
+                            <th></th>
+                            <th class="text-end table-info-cell">${selectedMonth}月計</th>
+                            <th class="text-end table-info-cell">${totalIncome.toLocaleString()}</th>
+                            <th class="text-end table-info-cell">${totalPayment.toLocaleString()}</th>
+                            <th></th>
+                            <th class="no-print"></th>
+                        </tr>
+                    `;
+                } else {
+                    ledgerFooter.innerHTML = '';
+                }
+                
+                // 画面上部のタイトルを更新
                 const displayYear = yearSelector.value || new Date().getFullYear();
-                const printMonth = monthSelector.value === 'all' ? '通年' : `${monthSelector.options[monthSelector.selectedIndex].text}`;
+                const monthText = monthSelector.value === 'all' ? '通年' : `${monthSelector.options[monthSelector.selectedIndex].text}`;
                 const japaneseYear = toJapaneseEra(displayYear);
                 
-                printTitle.textContent = `${japaneseYear}年 ${printMonth} 出納帳`;
-                printHeaderDate.textContent = `${japaneseYear}年`; // 年度のみを表示
-                printCompanyName.textContent = companyNameInput.value; // 会社名を表示
+                ledgerYear.textContent = `${japaneseYear}年 ${monthText}`;
             };
             
             const toJapaneseEra = (year) => {
@@ -714,6 +845,10 @@
                 // 印刷前に会社名を設定
                 window.addEventListener('beforeprint', () => {
                     printCompanyName.textContent = companyNameInput.value;
+                    const displayYear = yearSelector.value || new Date().getFullYear();
+                    const printMonth = monthSelector.value === 'all' ? '通年' : `${monthSelector.options[monthSelector.selectedIndex].text}`;
+                    const japaneseYear = toJapaneseEra(displayYear);
+                    printHeaderDate.textContent = `${japaneseYear}年 ${printMonth}`;
                 });
                 // 画面遷移ボタン
                 showPaymentFormBtn.addEventListener('click', () => showEntryForm('payment'));
@@ -854,6 +989,20 @@
 
                 // データのエクスポート・インポート
                 setupExportImport();
+
+                // Reset Data Button
+                resetDataBtn.addEventListener('click', () => {
+                    if (confirm('出納帳のすべてのデータを削除します。この操作は元に戻せません。よろしいですか？')) {
+                        db.entries = []; // Clear all entries
+                        saveDB(); // Save the empty entries
+                        alert('出納帳のデータがすべて削除されました。');
+                        // Optionally, re-render ledger if it's currently displayed, or just stay on home screen
+                        // If ledger screen is active, it might be good to refresh it.
+                        if (ledgerScreen.style.display === 'block') {
+                            renderLedger();
+                        }
+                    }
+                });
 
                 // --- 初期表示 ---
                 setupMonthSelector();
